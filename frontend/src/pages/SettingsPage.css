@@ -1,0 +1,29 @@
+.settings-page {
+  padding: 1rem;
+  padding-bottom: 80px;
+}
+
+.settings-page h1 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 1.5rem;
+}
+
+.settings-section {
+  background-color: var(--tg-theme-bg-color, #ffffff);
+  border-radius: 8px;
+  padding: 1.5rem;
+}
+
+.settings-info {
+  margin: 1.5rem 0;
+  padding: 1rem;
+  background-color: var(--tg-theme-hint-color, #f0f0f0);
+  border-radius: 8px;
+}
+
+.settings-info p {
+  margin: 0.5rem 0;
+  color: var(--tg-theme-text-color, #000000);
+}
+
