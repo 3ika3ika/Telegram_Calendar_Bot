@@ -29,5 +29,5 @@ class UserResponse(BaseModel):
 class UserUpdate(BaseModel):
     """Schema for updating user settings."""
     timezone: Optional[str] = None
-    metadata: Optional[dict] = None
+    extra_metadata: Optional[dict] = None
 

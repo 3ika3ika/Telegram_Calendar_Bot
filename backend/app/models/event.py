@@ -21,7 +21,7 @@ class Event(SQLModel, table=True):
     timezone: str = Field(default="UTC")
     location: Optional[str] = None
     recurrence_rule_id: Optional[int] = Field(default=None, foreign_key="recurrencerules.id")
-    metadata: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    extra_metadata: dict = Field(default_factory=dict, sa_column=Column(JSON))
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     

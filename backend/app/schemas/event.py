@@ -12,7 +12,7 @@ class EventBase(BaseModel):
     end_time: datetime
     timezone: str = Field(default="UTC")
     location: Optional[str] = Field(None, max_length=200)
-    metadata: dict = Field(default_factory=dict)
+    extra_metadata: dict = Field(default_factory=dict)
     
     @field_validator("end_time")
     @classmethod
@@ -39,7 +39,7 @@ class EventUpdate(BaseModel):
     location: Optional[str] = Field(None, max_length=200)
     recurrence_rule_id: Optional[int] = None
     reminder_offsets: Optional[List[int]] = None
-    metadata: Optional[dict] = None
+    extra_metadata: Optional[dict] = None
 
 
 class EventResponse(EventBase):

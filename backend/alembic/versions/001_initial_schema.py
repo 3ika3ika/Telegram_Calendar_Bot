@@ -29,7 +29,7 @@ def upgrade() -> None:
         sa.Column('timezone', sa.String(), nullable=True),
         sa.Column('subscription_plan', sa.String(), nullable=False),
         sa.Column('subscription_expires_at', sa.DateTime(), nullable=True),
-        sa.Column('metadata', postgresql.JSON(astext_type=sa.Text()), nullable=False),
+        sa.Column('extra_metadata', postgresql.JSON(astext_type=sa.Text()), nullable=False),
         sa.Column('created_at', sa.DateTime(), nullable=False),
         sa.Column('updated_at', sa.DateTime(), nullable=False),
         sa.PrimaryKeyConstraint('id'),
@@ -66,7 +66,7 @@ def upgrade() -> None:
         sa.Column('timezone', sa.String(), nullable=False),
         sa.Column('location', sa.String(), nullable=True),
         sa.Column('recurrence_rule_id', sa.Integer(), nullable=True),
-        sa.Column('metadata', postgresql.JSON(astext_type=sa.Text()), nullable=False),
+        sa.Column('extra_metadata', postgresql.JSON(astext_type=sa.Text()), nullable=False),
         sa.Column('created_at', sa.DateTime(), nullable=False),
         sa.Column('updated_at', sa.DateTime(), nullable=False),
         sa.ForeignKeyConstraint(['recurrence_rule_id'], ['recurrencerules.id'], ),
@@ -99,7 +99,7 @@ def upgrade() -> None:
         sa.Column('action', sa.String(), nullable=False),
         sa.Column('resource_type', sa.String(), nullable=False),
         sa.Column('resource_id', sa.String(), nullable=False),
-        sa.Column('metadata', postgresql.JSON(astext_type=sa.Text()), nullable=False),
+        sa.Column('extra_metadata', postgresql.JSON(astext_type=sa.Text()), nullable=False),
         sa.Column('created_at', sa.DateTime(), nullable=False),
         sa.PrimaryKeyConstraint('id')
     )

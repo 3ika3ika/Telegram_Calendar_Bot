@@ -61,7 +61,7 @@ async def create_event(
         timezone=event_data.timezone,
         location=event_data.location,
         recurrence_rule_id=event_data.recurrence_rule_id,
-        metadata=event_data.metadata,
+        extra_metadata=event_data.extra_metadata,
     )
     session.add(event)
     await session.flush()
@@ -80,7 +80,7 @@ async def create_event(
         action="CREATE",
         resource_type="event",
         resource_id=event.id,
-        metadata={"title": event.title},
+        extra_metadata={"title": event.title},
     )
     session.add(audit)
     
@@ -186,8 +186,8 @@ async def update_event(
         event.location = event_update.location
     if event_update.recurrence_rule_id is not None:
         event.recurrence_rule_id = event_update.recurrence_rule_id
-    if event_update.metadata is not None:
-        event.metadata.update(event_update.metadata)
+    if event_update.extra_metadata is not None:
+        event.extra_metadata.update(event_update.extra_metadata)
     
     event.updated_at = datetime.utcnow()
     
@@ -214,7 +214,7 @@ async def update_event(
         action="UPDATE",
         resource_type="event",
         resource_id=event.id,
-        metadata={"title": event.title},
+        extra_metadata={"title": event.title},
     )
     session.add(audit)
     
@@ -246,7 +246,7 @@ async def delete_event(
         action="DELETE",
         resource_type="event",
         resource_id=event.id,
-        metadata={"title": event.title},
+        extra_metadata={"title": event.title},
     )
     session.add(audit)
     
@@ -352,7 +352,7 @@ async def apply_ai_action(
             action="MOVE",
             resource_type="event",
             resource_id=payload.event_id,
-            metadata={
+            extra_metadata={
                 "original_id": payload.event_id,
                 "new_id": new_event.id,
                 "title": original_event.title,

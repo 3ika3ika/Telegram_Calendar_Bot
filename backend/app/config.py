@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     # App
     SECRET_KEY: str = "change-me-in-production"
     DEBUG: bool = False
-    CORS_ORIGINS: list[str] = ["https://web.telegram.org", "https://telegram.org"]
+    CORS_ORIGINS: list[str] = ["https://web.telegram.org", "https://telegram.org", "http://localhost:3000", "http://127.0.0.1:3000"]
     
     # Redis (optional, for rate limiting and Celery)
     REDIS_URL: Optional[str] = None
