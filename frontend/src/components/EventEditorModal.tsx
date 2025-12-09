@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { format } from 'date-fns'
 import { Event, EventCreate, EventUpdate } from '../types/api'
 import './EventEditorModal.css'
@@ -18,6 +18,8 @@ export default function EventEditorModal({
   onDelete,
   onClose,
 }: EventEditorModalProps) {
+  const startTimeRef = useRef<HTMLInputElement>(null)
+  const endTimeRef = useRef<HTMLInputElement>(null)
   const [title, setTitle] = useState(event?.title || '')
   const [description, setDescription] = useState(event?.description || '')
   const [location, setLocation] = useState(event?.location || '')
@@ -41,6 +43,45 @@ export default function EventEditorModal({
     // TODO: Load from event.reminders when available
   }, [event])
 
+  const ensureEndAfterStart = (newStart: Date) => {
+    const currentEnd = new Date(`${endDate}T${endTime}`)
+    if (currentEnd <= newStart) {
+      const newEnd = new Date(newStart.getTime() + 60 * 60 * 1000) // +1 hour
+      setEndDate(format(newEnd, 'yyyy-MM-dd'))
+      setEndTime(format(newEnd, 'HH:mm'))
+    }
+  }
+
+  const handleStartDateChange = (value: string) => {
+    setStartDate(value)
+    const newStart = new Date(`${value}T${startTime}`)
+    ensureEndAfterStart(newStart)
+  }
+
+  const handleStartTimeChange = (value: string) => {
+    setStartTime(value)
+    const newStart = new Date(`${startDate}T${value}`)
+    ensureEndAfterStart(newStart)
+    // Move cursor to minutes for quicker adjustment
+    setTimeout(() => {
+      const input = startTimeRef.current
+      if (input && input.setSelectionRange) {
+        input.setSelectionRange(3, 5)
+      }
+    }, 0)
+  }
+
+  const handleEndTimeChange = (value: string) => {
+    setEndTime(value)
+    // Move cursor to minutes for quicker adjustment
+    setTimeout(() => {
+      const input = endTimeRef.current
+      if (input && input.setSelectionRange) {
+        input.setSelectionRange(3, 5)
+      }
+    }, 0)
+  }
+
   const handleSave = async () => {
     if (!title.trim()) {
       alert('Please enter a title')
@@ -55,8 +96,17 @@ export default function EventEditorModal({
       return
     }
 
+    // Prevent creating events in the past (only for new events, not updates)
+    if (!event && start < new Date()) {
+      alert('You cannot create events in the past')
+      return
+    }
+
     setSaving(true)
     try {
+      // Get user's timezone or default to UTC
+      const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+      
       if (event) {
         await onSave({
           title,
@@ -64,6 +114,7 @@ export default function EventEditorModal({
           location: location || undefined,
           start_time: start.toISOString(),
           end_time: end.toISOString(),
+          timezone: userTimezone,
           reminder_offsets: reminders,
         } as EventUpdate)
       } else {
@@ -73,6 +124,7 @@ export default function EventEditorModal({
           location: location || undefined,
           start_time: start.toISOString(),
           end_time: end.toISOString(),
+          timezone: userTimezone,
           reminder_offsets: reminders,
         } as EventCreate)
       }
@@ -151,13 +203,14 @@ export default function EventEditorModal({
               type="date"
               className="form-input"
               value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
+              onChange={(e) => handleStartDateChange(e.target.value)}
             />
             <input
               type="time"
               className="form-input"
               value={startTime}
-              onChange={(e) => setStartTime(e.target.value)}
+              ref={startTimeRef}
+              onChange={(e) => handleStartTimeChange(e.target.value)}
             />
           </div>
         </div>
@@ -175,7 +228,8 @@ export default function EventEditorModal({
               type="time"
               className="form-input"
               value={endTime}
-              onChange={(e) => setEndTime(e.target.value)}
+              ref={endTimeRef}
+              onChange={(e) => handleEndTimeChange(e.target.value)}
             />
           </div>
         </div>

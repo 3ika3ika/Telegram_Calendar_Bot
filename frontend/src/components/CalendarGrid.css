@@ -56,23 +56,41 @@
 }
 
 .calendar-day-events {
-  flex: 1;
+  margin-top: auto;
   display: flex;
-  flex-wrap: wrap;
-  gap: 2px;
-  align-items: flex-start;
+  flex-direction: column;
+  gap: 4px;
 }
 
-.calendar-event-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
+.calendar-event-count {
+  align-self: flex-end;
   background-color: var(--tg-theme-button-color, #3390ec);
+  color: var(--tg-theme-button-text-color, #ffffff);
+  border-radius: 12px;
+  padding: 2px 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.calendar-event-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background-color: var(--tg-theme-hint-color, #e6f0ff);
+  color: var(--tg-theme-text-color, #000000);
+  font-size: 0.8rem;
+  border: 1px solid var(--tg-theme-button-color, #3390ec);
   cursor: pointer;
 }
 
-.calendar-event-more {
-  font-size: 0.75rem;
-  color: var(--tg-theme-hint-color, #999999);
+.calendar-event-chip-time {
+  font-weight: 700;
+  color: var(--tg-theme-button-color, #3390ec);
+}
+
+.calendar-event-chip-title {
+  font-weight: 500;
 }
 

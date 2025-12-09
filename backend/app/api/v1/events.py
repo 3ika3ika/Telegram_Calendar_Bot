@@ -1,6 +1,6 @@
 """Event endpoints."""
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Header, Query
@@ -25,6 +25,14 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/events", tags=["events"])
 
 
+def normalize_datetime(dt: datetime) -> datetime:
+    """Normalize datetime to UTC timezone-naive for database comparison."""
+    if dt.tzinfo is not None:
+        # Convert to UTC and remove timezone info
+        return dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
+
+
 def get_user_id(telegram_user_id: int = Header(..., alias="X-Telegram-User-Id")) -> int:
     """Dependency to extract telegram_user_id from header."""
     return telegram_user_id
@@ -37,14 +45,26 @@ async def create_event(
     session: AsyncSession = Depends(get_session),
 ):
     """Create a new event."""
+    # Normalize timezone-aware datetimes to UTC timezone-naive for database
+    normalized_start = normalize_datetime(event_data.start_time)
+    normalized_end = normalize_datetime(event_data.end_time)
+    
+    # Prevent creating events in the past
+    now = datetime.utcnow()
+    if normalized_start < now:
+        raise HTTPException(
+            status_code=400, 
+            detail="You cannot create events in the past"
+        )
+    
     # Check for duplicates (same title and overlapping time)
     existing = await session.execute(
         select(Event).where(
             and_(
                 Event.user_id == user_id,
                 Event.title == event_data.title,
-                Event.start_time < event_data.end_time,
-                Event.end_time > event_data.start_time,
+                Event.start_time < normalized_end,
+                Event.end_time > normalized_start,
             )
         )
     )
@@ -56,8 +76,8 @@ async def create_event(
         user_id=user_id,
         title=event_data.title,
         description=event_data.description,
-        start_time=event_data.start_time,
-        end_time=event_data.end_time,
+        start_time=normalized_start,
+        end_time=normalized_end,
         timezone=event_data.timezone,
         location=event_data.location,
         recurrence_rule_id=event_data.recurrence_rule_id,
@@ -104,9 +124,16 @@ async def list_events(
     query = select(Event).where(Event.user_id == user_id)
     
     if start_date:
-        query = query.where(Event.start_time >= start_date)
+        # Normalize timezone-aware datetimes to UTC timezone-naive
+        normalized_start = normalize_datetime(start_date)
+        # Filter by start_time >= start_date (events that start on or after this date)
+        query = query.where(Event.start_time >= normalized_start)
     if end_date:
-        query = query.where(Event.end_time <= end_date)
+        # Normalize timezone-aware datetimes to UTC timezone-naive
+        normalized_end = normalize_datetime(end_date)
+        # Filter by start_time <= end_date (events that start before or on this date)
+        # This ensures we get all events that start within the date range
+        query = query.where(Event.start_time <= normalized_end)
     if search:
         search_term = f"%{search}%"
         query = query.where(
@@ -177,9 +204,11 @@ async def update_event(
     if event_update.description is not None:
         event.description = event_update.description
     if event_update.start_time is not None:
-        event.start_time = event_update.start_time
+        # Normalize timezone-aware datetimes to UTC timezone-naive
+        event.start_time = normalize_datetime(event_update.start_time)
     if event_update.end_time is not None:
-        event.end_time = event_update.end_time
+        # Normalize timezone-aware datetimes to UTC timezone-naive
+        event.end_time = normalize_datetime(event_update.end_time)
     if event_update.timezone is not None:
         event.timezone = event_update.timezone
     if event_update.location is not None:

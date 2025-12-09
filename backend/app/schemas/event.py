@@ -1,7 +1,7 @@
 """Event schemas."""
 from datetime import datetime
 from typing import Optional, List
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, field_serializer
 
 
 class EventBase(BaseModel):
@@ -50,6 +50,13 @@ class EventResponse(EventBase):
     recurrence_rule_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime
+    
+    @field_serializer('start_time', 'end_time', 'created_at', 'updated_at')
+    def serialize_datetime(self, value: datetime, _info) -> str:
+        """Serialize datetime to ISO format with Z suffix for UTC."""
+        if value.tzinfo is None:
+            return value.isoformat() + 'Z'
+        return value.isoformat()
     
     class Config:
         from_attributes = True

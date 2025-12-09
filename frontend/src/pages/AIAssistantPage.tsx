@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { User, AIActionResponse, Event } from '../types/api'
+import { User, AIActionResponse } from '../types/api'
 import { apiClient } from '../services/api'
 import NLPBox from '../components/NLPBox'
 import NavBar from '../components/NavBar'
@@ -9,7 +9,7 @@ interface AIAssistantPageProps {
   user: User
 }
 
-export default function AIAssistantPage({ user }: AIAssistantPageProps) {
+export default function AIAssistantPage({}: AIAssistantPageProps) {
   const [parsedAction, setParsedAction] = useState<AIActionResponse | null>(null)
   const [applying, setApplying] = useState(false)
   const [error, setError] = useState<string | null>(null)

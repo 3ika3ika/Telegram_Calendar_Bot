@@ -1,4 +1,4 @@
-export interface TelegramWebApp {
+export interface TelegramWebAppType {
   initData: string
   initDataUnsafe: {
     user?: {

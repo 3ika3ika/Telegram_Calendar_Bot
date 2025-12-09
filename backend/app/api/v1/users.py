@@ -53,10 +53,15 @@ def verify_telegram_webapp(init_data: str) -> Optional[dict]:
                 data_check.append(f"{key}={value[0]}")
         data_check_string = "\n".join(sorted(data_check))
         
-        # Calculate secret key
+        # Calculate secret key as per Telegram docs:
+        # secret_key = HMAC_SHA256("WebAppData", bot_token)
+        bot_token = settings.TELEGRAM_BOT_TOKEN
+        if not bot_token:
+            logger.error("TELEGRAM_BOT_TOKEN is not set; cannot verify WebApp signature")
+            return None
         secret_key = hmac.new(
             "WebAppData".encode(),
-            settings.TELEGRAM_WEBAPP_SECRET.encode(),
+            bot_token.encode(),
             hashlib.sha256
         ).digest()
         

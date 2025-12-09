@@ -1,6 +1,4 @@
 .event-card {
-  display: flex;
-  gap: 1rem;
   padding: 1rem;
   background-color: var(--tg-theme-bg-color, #ffffff);
   border: 1px solid var(--tg-theme-hint-color, #cccccc);
@@ -14,39 +12,65 @@
   background-color: var(--tg-theme-hint-color, #f0f0f0);
 }
 
-.event-card-time {
+.event-card-content {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  min-width: 60px;
-  font-weight: 600;
-  color: var(--tg-theme-button-color, #3390ec);
+  gap: 0.5rem;
 }
 
-.event-card-time-start {
-  font-size: 1rem;
-}
-
-.event-card-time-end {
-  font-size: 0.875rem;
-  opacity: 0.7;
-}
-
-.event-card-content {
-  flex: 1;
+.event-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
 }
 
 .event-card-title {
   font-weight: 600;
   font-size: 1rem;
-  margin-bottom: 0.25rem;
   color: var(--tg-theme-text-color, #000000);
+  flex: 1;
+}
+
+.event-card-date {
+  font-size: 0.875rem;
+  color: var(--tg-theme-button-color, #3390ec);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.event-card-time-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.event-card-time {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.event-card-time-label {
+  color: var(--tg-theme-hint-color, #999999);
+  min-width: 45px;
+}
+
+.event-card-time-value {
+  color: var(--tg-theme-text-color, #000000);
+  font-weight: 500;
+}
+
+.event-card-time-date {
+  color: var(--tg-theme-hint-color, #999999);
+  font-size: 0.8rem;
 }
 
 .event-card-description {
   font-size: 0.875rem;
   color: var(--tg-theme-hint-color, #999999);
-  margin-bottom: 0.25rem;
+  margin-top: 0.25rem;
 }
 
 .event-card-location {

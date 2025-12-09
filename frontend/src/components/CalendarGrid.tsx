@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, startOfWeek, endOfWeek, addDays } from 'date-fns'
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, startOfWeek, endOfWeek } from 'date-fns'
 import { Event } from '../types/api'
 import './CalendarGrid.css'
 
@@ -56,22 +56,29 @@ export default function CalendarGrid({ currentDate, events, onDateClick, onEvent
               onClick={() => onDateClick(day)}
             >
               <div className="calendar-day-number">{format(day, 'd')}</div>
-              <div className="calendar-day-events">
-                {dayEvents.slice(0, 3).map((event) => (
-                  <div
-                    key={event.id}
-                    className="calendar-event-dot"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onEventClick(event)
-                    }}
-                    title={event.title}
-                  />
-                ))}
-                {dayEvents.length > 3 && (
-                  <div className="calendar-event-more">+{dayEvents.length - 3}</div>
-                )}
-              </div>
+              {dayEvents.length > 0 && (
+                <div className="calendar-day-events">
+                  <div className="calendar-event-count">{dayEvents.length}</div>
+                  {dayEvents.slice(0, 3).map((event) => (
+                    <div
+                      key={event.id}
+                      className="calendar-event-chip"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onEventClick(event)
+                      }}
+                      title={event.title}
+                    >
+                      <span className="calendar-event-chip-time">
+                        {format(new Date(event.start_time), 'HH:mm')}
+                      </span>
+                      <span className="calendar-event-chip-title">
+                        {event.title.length > 10 ? `${event.title.slice(0, 10)}…` : event.title}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )
         })}

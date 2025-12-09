@@ -11,7 +11,7 @@ interface EventDetailPageProps {
   user: User
 }
 
-export default function EventDetailPage({ user }: EventDetailPageProps) {
+export default function EventDetailPage({}: EventDetailPageProps) {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [event, setEvent] = useState<Event | null>(null)

@@ -21,16 +21,16 @@ async def send_due_reminders():
         try:
             now = datetime.utcnow()
             
-            # Find events with reminders that need to be sent
-            # We check events starting in the next 24 hours
-            future_time = now + timedelta(days=1)
+            # Find all events with unsent reminders that start in the future
+            # We check events starting up to 7 days in the future to catch all reminders
+            future_time = now + timedelta(days=7)
             
             result = await session.execute(
                 select(Event, Reminder).join(
                     Reminder, Event.id == Reminder.event_id
                 ).where(
                     and_(
-                        Event.start_time >= now,
+                        Event.start_time > now,  # Event hasn't started yet
                         Event.start_time <= future_time,
                         Reminder.sent_at.is_(None),  # Not sent yet
                     )
@@ -38,13 +38,16 @@ async def send_due_reminders():
             )
             
             reminders_to_send = result.all()
+            sent_count = 0
             
             for event, reminder in reminders_to_send:
                 # Calculate when reminder should be sent
                 reminder_time = event.start_time - timedelta(minutes=reminder.offset_minutes)
                 
-                # Check if it's time to send (within 1 minute window)
-                if now >= reminder_time - timedelta(minutes=1) and now <= reminder_time + timedelta(minutes=1):
+                # Check if it's time to send (within 1 minute window to account for scheduler timing)
+                # Also check if reminder time has passed (catch up on missed reminders within 5 minutes)
+                time_diff = (now - reminder_time).total_seconds() / 60  # minutes
+                if -1 <= time_diff <= 5:  # Within 1 minute before to 5 minutes after (catch up window)
                     # Send reminder
                     event_time_str = event.start_time.strftime("%Y-%m-%d %H:%M UTC")
                     success = await telegram_bot.send_reminder(
@@ -56,11 +59,14 @@ async def send_due_reminders():
                     
                     if success:
                         reminder.sent_at = now
-                        logger.info(f"Sent reminder for event {event.id} to user {event.user_id}")
+                        sent_count += 1
+                        logger.info(f"Sent reminder for event '{event.title}' (ID: {event.id}) to user {event.user_id} - {reminder.offset_minutes}min before event")
                     else:
-                        logger.warning(f"Failed to send reminder for event {event.id}")
+                        logger.warning(f"Failed to send reminder for event {event.id} to user {event.user_id} - TELEGRAM_BOT_TOKEN may not be set")
             
-            await session.commit()
+            if sent_count > 0:
+                await session.commit()
+                logger.info(f"Sent {sent_count} reminder(s) successfully")
             
         except Exception as e:
             logger.error(f"Error sending reminders: {e}", exc_info=True)

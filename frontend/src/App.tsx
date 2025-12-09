@@ -1,18 +1,19 @@
 import { useEffect, useState, useCallback } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { TelegramWebApp } from './types/telegram'
+import { TelegramWebAppType } from './types/telegram'
 import { User } from './types/api'
 import { apiClient } from './services/api'
 import CalendarPage from './pages/CalendarPage'
 import EventDetailPage from './pages/EventDetailPage'
 import SettingsPage from './pages/SettingsPage'
 import AIAssistantPage from './pages/AIAssistantPage'
-import TelegramLogin from './components/TelegramLogin'
 import './App.css'
 
 declare global {
   interface Window {
-    Telegram?: TelegramWebApp
+    Telegram?: {
+      WebApp?: TelegramWebAppType
+    }
   }
 }
 
@@ -26,8 +27,18 @@ function App() {
       setLoading(true)
       setError(null)
 
+      // Wait a bit for Telegram script to load if in production
+      const isDevMode = import.meta.env.DEV
+      if (!isDevMode && !window.Telegram?.WebApp) {
+        await new Promise(resolve => setTimeout(resolve, 500))
+      }
+
       if (!window.Telegram?.WebApp?.initData) {
-        setError('Telegram WebApp not available')
+        // In dev mode, the mock should have been set up, so this shouldn't happen
+        if (isDevMode) {
+          console.warn('Telegram WebApp mock not set up properly')
+        }
+        setError('Telegram WebApp not available. Please open this app from Telegram, or use development mode.')
         setLoading(false)
         return
       }
@@ -37,7 +48,8 @@ function App() {
       setUser(userData)
     } catch (err: any) {
       console.error('Authentication error:', err)
-      setError(err.message || 'Failed to authenticate')
+      const errorMessage = err.response?.data?.detail || err.message || 'Failed to authenticate'
+      setError(errorMessage)
     } finally {
       setLoading(false)
     }
@@ -49,6 +61,9 @@ function App() {
     const isDevMode = import.meta.env.DEV
     const hasValidInitData = window.Telegram?.WebApp?.initData
     
+    // The mock should already be set up in index.html, but ensure it's there
+    
+    // Set up mock immediately if needed (before Telegram script tries to access it)
     if (isDevMode && !hasValidInitData) {
       console.log('Development mode: Mocking Telegram WebApp')
       const mockInitData = `user=%7B%22id%22%3A123456789%2C%22first_name%22%3A%22Test%22%2C%22last_name%22%3A%22User%22%2C%22username%22%3A%22testuser%22%2C%22language_code%22%3A%22en%22%7D&auth_date=${Math.floor(Date.now() / 1000)}&hash=dev_mode_hash`
@@ -57,13 +72,16 @@ function App() {
       if (!window.Telegram) {
         window.Telegram = {} as any
       }
-      if (!window.Telegram.WebApp) {
-        window.Telegram.WebApp = {} as any
+      // At this point, window.Telegram is guaranteed to exist
+      const telegram = window.Telegram!
+      const existingWebApp = telegram.WebApp || {}
+      if (!telegram.WebApp) {
+        telegram.WebApp = {} as any
       }
       
       // Set the mock data - merge with existing WebApp if it exists
-      window.Telegram.WebApp = {
-        ...(window.Telegram.WebApp || {}),
+      telegram.WebApp = {
+        ...existingWebApp,
         initData: mockInitData,
         initDataUnsafe: {
           user: {
@@ -76,10 +94,10 @@ function App() {
           auth_date: Math.floor(Date.now() / 1000),
           hash: 'dev_mode_hash'
         },
-        version: window.Telegram.WebApp?.version || '6.0',
-        platform: window.Telegram.WebApp?.platform || 'web',
-        colorScheme: window.Telegram.WebApp?.colorScheme || 'light',
-        themeParams: window.Telegram.WebApp?.themeParams || {
+        version: (existingWebApp as any)?.version || '6.0',
+        platform: (existingWebApp as any)?.platform || 'web',
+        colorScheme: (existingWebApp as any)?.colorScheme || 'light',
+        themeParams: (existingWebApp as any)?.themeParams || {
           bg_color: '#ffffff',
           text_color: '#000000',
           hint_color: '#999999',
@@ -87,19 +105,19 @@ function App() {
           button_color: '#3390ec',
           button_text_color: '#ffffff'
         },
-        isExpanded: window.Telegram.WebApp?.isExpanded ?? true,
-        viewportHeight: window.Telegram.WebApp?.viewportHeight || window.innerHeight,
-        viewportStableHeight: window.Telegram.WebApp?.viewportStableHeight || window.innerHeight,
-        headerColor: window.Telegram.WebApp?.headerColor || '#3390ec',
-        backgroundColor: window.Telegram.WebApp?.backgroundColor || '#ffffff',
-        BackButton: window.Telegram.WebApp?.BackButton || {
+        isExpanded: (existingWebApp as any)?.isExpanded ?? true,
+        viewportHeight: (existingWebApp as any)?.viewportHeight || window.innerHeight,
+        viewportStableHeight: (existingWebApp as any)?.viewportStableHeight || window.innerHeight,
+        headerColor: (existingWebApp as any)?.headerColor || '#3390ec',
+        backgroundColor: (existingWebApp as any)?.backgroundColor || '#ffffff',
+        BackButton: (existingWebApp as any)?.BackButton || {
           isVisible: false,
           onClick: () => {},
           offClick: () => {},
           show: () => {},
           hide: () => {}
         },
-        MainButton: window.Telegram.WebApp?.MainButton || {
+        MainButton: (existingWebApp as any)?.MainButton || {
           text: '',
           color: '#3390ec',
           textColor: '#ffffff',
@@ -117,26 +135,26 @@ function App() {
           hideProgress: () => {},
           setParams: () => {}
         },
-        HapticFeedback: window.Telegram.WebApp?.HapticFeedback || {
+        HapticFeedback: (existingWebApp as any)?.HapticFeedback || {
           impactOccurred: () => {},
           notificationOccurred: () => {},
           selectionChanged: () => {}
         },
-        ready: window.Telegram.WebApp?.ready || (() => {}),
-        expand: window.Telegram.WebApp?.expand || (() => {}),
-        close: window.Telegram.WebApp?.close || (() => {}),
-        sendData: window.Telegram.WebApp?.sendData || (() => {}),
-        openLink: window.Telegram.WebApp?.openLink || (() => {}),
-        openTelegramLink: window.Telegram.WebApp?.openTelegramLink || (() => {}),
-        openInvoice: window.Telegram.WebApp?.openInvoice || (() => {}),
-        showPopup: window.Telegram.WebApp?.showPopup || (() => {}),
-        showAlert: window.Telegram.WebApp?.showAlert || (() => {}),
-        showConfirm: window.Telegram.WebApp?.showConfirm || (() => Promise.resolve(true)),
-        showScanQrPopup: window.Telegram.WebApp?.showScanQrPopup || (() => {}),
-        closeScanQrPopup: window.Telegram.WebApp?.closeScanQrPopup || (() => {}),
-        readTextFromClipboard: window.Telegram.WebApp?.readTextFromClipboard || (() => Promise.resolve('')),
-        requestWriteAccess: window.Telegram.WebApp?.requestWriteAccess || (() => Promise.resolve(true)),
-        requestContact: window.Telegram.WebApp?.requestContact || (() => Promise.resolve(true))
+        ready: (existingWebApp as any)?.ready || (() => {}),
+        expand: (existingWebApp as any)?.expand || (() => {}),
+        close: (existingWebApp as any)?.close || (() => {}),
+        sendData: (existingWebApp as any)?.sendData || (() => {}),
+        openLink: (existingWebApp as any)?.openLink || (() => {}),
+        openTelegramLink: (existingWebApp as any)?.openTelegramLink || (() => {}),
+        openInvoice: (existingWebApp as any)?.openInvoice || (() => {}),
+        showPopup: (existingWebApp as any)?.showPopup || (() => {}),
+        showAlert: (existingWebApp as any)?.showAlert || (() => {}),
+        showConfirm: (existingWebApp as any)?.showConfirm || (() => Promise.resolve(true)),
+        showScanQrPopup: (existingWebApp as any)?.showScanQrPopup || (() => {}),
+        closeScanQrPopup: (existingWebApp as any)?.closeScanQrPopup || (() => {}),
+        readTextFromClipboard: (existingWebApp as any)?.readTextFromClipboard || (() => Promise.resolve('')),
+        requestWriteAccess: (existingWebApp as any)?.requestWriteAccess || (() => Promise.resolve(true)),
+        requestContact: (existingWebApp as any)?.requestContact || (() => Promise.resolve(true))
       } as any
     }
 

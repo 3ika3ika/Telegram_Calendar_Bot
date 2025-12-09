@@ -252,10 +252,11 @@ async def parse_user_input(
     
     # Build response
     payload_obj = AIActionPayload(**payload)
+    safe_summary = result.get("summary") or payload.get("message") or result.get("action") or "Action parsed"
     return AIActionResponse(
         action=result.get("action", "ASK"),
         payload=payload_obj,
         confidence=result.get("confidence", 0.0),
-        summary=result.get("summary", "Action parsed"),
+        summary=safe_summary,
     )
 

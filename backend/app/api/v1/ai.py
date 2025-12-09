@@ -34,7 +34,9 @@ async def parse_natural_language(
     4. Returns structured action with summary
     """
     # Get recent events for context (last 30 days)
-    start_date = datetime.utcnow() - timedelta(days=30)
+    # Use timezone-naive UTC datetime for database comparison
+    now = datetime.utcnow()
+    start_date = now - timedelta(days=30)
     result = await session.execute(
         select(Event).where(
             Event.user_id == user_id,
@@ -56,11 +58,11 @@ async def parse_natural_language(
     ]
     
     # Get all events for conflict checking (next 90 days)
-    end_date = datetime.utcnow() + timedelta(days=90)
+    end_date = now + timedelta(days=90)
     result_all = await session.execute(
         select(Event).where(
             Event.user_id == user_id,
-            Event.start_time >= datetime.utcnow(),
+            Event.start_time >= now,
             Event.start_time <= end_date,
         )
     )
@@ -85,7 +87,14 @@ async def parse_natural_language(
             existing_events=existing_events,
         )
         return response
+    except ValueError as e:
+        # Common case: OpenAI client not initialized (missing OPENAI_API_KEY)
+        msg = str(e)
+        if "OpenAI client not initialized" in msg:
+            raise HTTPException(status_code=503, detail="AI is not configured (missing OPENAI_API_KEY).")
+        logger.error(f"Error parsing natural language: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to parse input: {msg}")
     except Exception as e:
         logger.error(f"Error parsing natural language: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to parse input: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to parse input")
 
