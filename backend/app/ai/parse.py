@@ -1,11 +1,20 @@
 """AI parsing logic with server-side validation."""
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List
 from app.ai.engine import ai_engine, MASTER_SYSTEM_PROMPT
 from app.schemas.ai import AIActionResponse, AIActionPayload
 
 logger = logging.getLogger(__name__)
+
+
+def normalize_datetime_for_comparison(dt: datetime) -> datetime:
+    """Normalize datetime to UTC timezone-naive for comparison."""
+    if dt.tzinfo is not None:
+        # Convert to UTC and remove timezone info
+        return dt.astimezone(timezone.utc).replace(tzinfo=None)
+    # Already timezone-naive, assume UTC
+    return dt
 
 # Allowed actions
 ALLOWED_ACTIONS = {"CREATE", "UPDATE", "DELETE", "MOVE", "SUGGEST", "ASK", "NOOP", "CONFLICT"}
@@ -109,6 +118,10 @@ def validate_against_global_rules(action_data: Dict[str, Any], existing_events: 
                 start = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
                 end = datetime.fromisoformat(end_time.replace("Z", "+00:00"))
                 
+                # Normalize to timezone-naive UTC for comparison
+                start = normalize_datetime_for_comparison(start)
+                end = normalize_datetime_for_comparison(end)
+                
                 # Check for duplicates (same title and overlapping time)
                 for event in existing_events:
                     event_start = event.get("start_time")
@@ -119,6 +132,10 @@ def validate_against_global_rules(action_data: Dict[str, Any], existing_events: 
                         event_start = datetime.fromisoformat(event_start.replace("Z", "+00:00"))
                     if isinstance(event_end, str):
                         event_end = datetime.fromisoformat(event_end.replace("Z", "+00:00"))
+                    
+                    # Normalize existing event times
+                    event_start = normalize_datetime_for_comparison(event_start)
+                    event_end = normalize_datetime_for_comparison(event_end)
                     
                     if event_title == title:
                         # Check overlap
@@ -138,6 +155,10 @@ def validate_against_global_rules(action_data: Dict[str, Any], existing_events: 
                 end = datetime.fromisoformat(end_time.replace("Z", "+00:00"))
                 
                 # Check for conflicts (overlapping events)
+                # Normalize to timezone-naive UTC for comparison
+                start = normalize_datetime_for_comparison(start)
+                end = normalize_datetime_for_comparison(end)
+                
                 conflicts = []
                 for event in existing_events:
                     if action == "UPDATE" and event.get("id") == payload.get("event_id"):
@@ -150,6 +171,10 @@ def validate_against_global_rules(action_data: Dict[str, Any], existing_events: 
                         event_start = datetime.fromisoformat(event_start.replace("Z", "+00:00"))
                     if isinstance(event_end, str):
                         event_end = datetime.fromisoformat(event_end.replace("Z", "+00:00"))
+                    
+                    # Normalize existing event times
+                    event_start = normalize_datetime_for_comparison(event_start)
+                    event_end = normalize_datetime_for_comparison(event_end)
                     
                     # Check overlap
                     if not (end <= event_start or start >= event_end):
@@ -225,6 +250,10 @@ async def parse_user_input(
                 start = datetime.fromisoformat(start_time.replace("Z", "+00:00"))
                 end = datetime.fromisoformat(end_time.replace("Z", "+00:00"))
                 
+                # Normalize to timezone-naive UTC for comparison
+                start = normalize_datetime_for_comparison(start)
+                end = normalize_datetime_for_comparison(end)
+                
                 conflicts = []
                 for event in existing:
                     if action == "UPDATE" and event.get("id") == payload.get("event_id"):
@@ -237,6 +266,10 @@ async def parse_user_input(
                         event_start = datetime.fromisoformat(event_start.replace("Z", "+00:00"))
                     if isinstance(event_end, str):
                         event_end = datetime.fromisoformat(event_end.replace("Z", "+00:00"))
+                    
+                    # Normalize existing event times
+                    event_start = normalize_datetime_for_comparison(event_start)
+                    event_end = normalize_datetime_for_comparison(event_end)
                     
                     if not (end <= event_start or start >= event_end):
                         conflicts.append(event.get("title", "Untitled"))

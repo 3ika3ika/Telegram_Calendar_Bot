@@ -7,7 +7,6 @@ export default function NavBar() {
 
   const navItems = [
     { path: '/', label: 'Calendar', icon: '📅' },
-    { path: '/ai', label: 'AI', icon: '🤖' },
     { path: '/settings', label: 'Settings', icon: '⚙️' },
   ]
 

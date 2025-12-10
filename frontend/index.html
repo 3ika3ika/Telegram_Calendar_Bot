@@ -5,7 +5,79 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Telegram Calendar</title>
+<<<<<<< Updated upstream
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+=======
+    <script>
+      // Suppress Telegram WebApp errors in development
+      window.addEventListener('error', function(e) {
+        if (e.message && (e.message.includes('-102') || e.message.includes('Telegram'))) {
+          e.preventDefault();
+          console.log('Suppressed Telegram WebApp error (expected in development)');
+          return true;
+        }
+      }, true);
+      
+      // Set up mock Telegram WebApp early for development
+      (function() {
+        // Check if we're likely in development (not in Telegram)
+        var isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        
+        if (isDev) {
+          // Create mock Telegram object before script loads
+          if (!window.Telegram) {
+            window.Telegram = {};
+          }
+          if (!window.Telegram.WebApp) {
+            var mockInitData = 'user=%7B%22id%22%3A1478409325%2C%22first_name%22%3A%22ZIKA%22%2C%22last_name%22%3A%22%22%2C%22username%22%3A%22zk3kt%22%2C%22language_code%22%3A%22en%22%7D&auth_date=' + Math.floor(Date.now() / 1000) + '&hash=dev_mode_hash';
+            
+            window.Telegram.WebApp = {
+              initData: mockInitData,
+              initDataUnsafe: {
+                user: {
+                  id: 1478409325,
+                  first_name: 'ZIKA',
+                  last_name: '',
+                  username: 'zk3kt',
+                  language_code: 'en'
+                },
+                auth_date: Math.floor(Date.now() / 1000),
+                hash: 'dev_mode_hash'
+              },
+              version: '6.0',
+              platform: 'web',
+              colorScheme: 'light',
+              themeParams: {
+                bg_color: '#ffffff',
+                text_color: '#000000',
+                hint_color: '#999999',
+                link_color: '#3390ec',
+                button_color: '#3390ec',
+                button_text_color: '#ffffff'
+              },
+              ready: function() {},
+              expand: function() {}
+            };
+            console.log('Development mode: Mock Telegram WebApp initialized');
+          }
+        }
+      })();
+      
+      // Load Telegram WebApp script with error handling
+      (function() {
+        try {
+          var script = document.createElement('script');
+          script.src = 'https://telegram.org/js/telegram-web-app.js';
+          script.onerror = function() {
+            console.log('Telegram WebApp script failed to load (expected in development)');
+          };
+          document.head.appendChild(script);
+        } catch(e) {
+          console.log('Error loading Telegram WebApp script (expected in development):', e);
+        }
+      })();
+    </script>
+>>>>>>> Stashed changes
   </head>
   <body>
     <div id="root"></div>

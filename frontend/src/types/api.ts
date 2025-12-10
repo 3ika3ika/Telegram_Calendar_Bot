@@ -57,33 +57,3 @@ export interface EventListResponse {
   page: number
   page_size: number
 }
-
-export interface AIActionPayload {
-  event_id?: string
-  title?: string
-  start_time?: string
-  end_time?: string
-  recurrence?: Record<string, any>
-  reminders?: number[]
-  message?: string
-}
-
-export interface AIActionResponse {
-  action: 'CREATE' | 'UPDATE' | 'DELETE' | 'MOVE' | 'SUGGEST' | 'ASK' | 'NOOP' | 'CONFLICT'
-  payload: AIActionPayload
-  confidence: number
-  summary: string
-}
-
-export interface AIApplyActionRequest {
-  action: 'CREATE' | 'UPDATE' | 'DELETE' | 'MOVE' | 'SUGGEST' | 'ASK' | 'NOOP' | 'CONFLICT'
-  payload: AIActionPayload
-  original_text?: string
-}
-
-export interface AIParseRequest {
-  text: string
-  context_events?: Event[]
-  user_memory?: Record<string, any>
-}
-

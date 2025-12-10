@@ -27,6 +27,43 @@ export default function CalendarPage({ user }: CalendarPageProps) {
     loadEvents()
   }, [currentDate])
 
+<<<<<<< Updated upstream
+=======
+  useEffect(() => {
+    // Load upcoming events on mount and refresh periodically
+    loadUpcomingEvents()
+    const interval = setInterval(() => {
+      loadUpcomingEvents()
+    }, 60000) // Refresh every minute
+    
+    return () => clearInterval(interval)
+  }, [])
+
+  useEffect(() => {
+    // Refresh events when page becomes visible (user returns to tab)
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        loadEvents()
+        loadUpcomingEvents()
+      }
+    }
+
+    // Refresh on focus (user clicks on window/tab)
+    const handleFocus = () => {
+      loadEvents()
+      loadUpcomingEvents()
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('focus', handleFocus)
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('focus', handleFocus)
+    }
+  }, [currentDate])
+
+>>>>>>> Stashed changes
   const loadEvents = async () => {
     try {
       setLoading(true)

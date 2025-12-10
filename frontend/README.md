@@ -28,14 +28,12 @@ frontend/
 │   │   ├── CalendarGrid.tsx
 │   │   ├── EventCard.tsx
 │   │   ├── EventEditorModal.tsx
-│   │   ├── NLPBox.tsx
 │   │   ├── NavBar.tsx
 │   │   └── TelegramLogin.tsx
 │   ├── pages/               # Page components
 │   │   ├── CalendarPage.tsx
 │   │   ├── EventDetailPage.tsx
-│   │   ├── SettingsPage.tsx
-│   │   └── AIAssistantPage.tsx
+│   │   └── SettingsPage.tsx
 │   ├── services/           # API client & cache
 │   │   ├── api.ts
 │   │   └── cache.ts
@@ -62,9 +60,9 @@ The app uses Telegram WebApp JS API for:
 
 - **Calendar Views**: Month grid with event indicators
 - **Event Management**: Create, edit, delete events
-- **AI Assistant**: Natural language event creation
 - **Local Caching**: IndexedDB for offline support
 - **Responsive Design**: Optimized for mobile Telegram
+- **AI Assistance via Telegram chat**: Interact with the assistant only through the Telegram bot, not the mini app UI
 
 ## Building for Production
 

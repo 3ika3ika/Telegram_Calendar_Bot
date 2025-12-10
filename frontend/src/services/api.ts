@@ -1,5 +1,5 @@
 import axios, { AxiosInstance } from 'axios'
-import { User, Event, EventCreate, EventUpdate, EventListResponse, AIActionResponse, AIParseRequest, AIApplyActionRequest } from '../types/api'
+import { User, Event, EventCreate, EventUpdate, EventListResponse } from '../types/api'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 
@@ -93,15 +93,6 @@ class APIClient {
     await this.client.delete(`/api/v1/events/${eventId}`)
   }
 
-  async parseAI(request: AIParseRequest): Promise<AIActionResponse> {
-    const response = await this.client.post<AIActionResponse>('/api/v1/ai/parse', request)
-    return response.data
-  }
-
-  async applyAIAction(action: AIApplyActionRequest): Promise<Event> {
-    const response = await this.client.post<Event>('/api/v1/events/apply_action', action)
-    return response.data
-  }
 }
 
 export const apiClient = new APIClient()

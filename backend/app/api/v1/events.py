@@ -37,6 +37,23 @@ async def create_event(
     session: AsyncSession = Depends(get_session),
 ):
     """Create a new event."""
+<<<<<<< Updated upstream
+=======
+    # Normalize timezone-aware datetimes to UTC timezone-naive for database
+    normalized_start = normalize_datetime(event_data.start_time)
+    normalized_end = normalize_datetime(event_data.end_time)
+    
+    # Prevent creating events in the past
+    # Allow a small buffer (5 minutes) to account for timezone differences and clock skew
+    now = datetime.utcnow()
+    buffer = timedelta(minutes=5)
+    if normalized_start < (now - buffer):
+        raise HTTPException(
+            status_code=400, 
+            detail="You cannot create events in the past"
+        )
+    
+>>>>>>> Stashed changes
     # Check for duplicates (same title and overlapping time)
     existing = await session.execute(
         select(Event).where(
