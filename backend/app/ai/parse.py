@@ -271,24 +271,65 @@ async def parse_user_input(
                     event_start = normalize_datetime_for_comparison(event_start)
                     event_end = normalize_datetime_for_comparison(event_end)
                     
-                    if not (end <= event_start or start >= event_end):
-                        conflicts.append(event.get("title", "Untitled"))
+                    # Check for actual overlap: events conflict if they overlap in time
+                    # Two events overlap if: start < other_end AND end > other_start
+                    if start < event_end and end > event_start:
+                        event_title = event.get("title", "Untitled")
+                        # Format times for better message
+                        try:
+                            event_start_str = event_start.strftime("%H:%M") if isinstance(event_start, datetime) else str(event_start)
+                            event_end_str = event_end.strftime("%H:%M") if isinstance(event_end, datetime) else str(event_end)
+                            conflicts.append(f"'{event_title}' ({event_start_str}-{event_end_str})")
+                        except Exception:
+                            conflicts.append(f"'{event_title}'")
                 
                 if conflicts:
                     result["action"] = "CONFLICT"
+                    conflicts_str = ", ".join(conflicts)
                     result["payload"]["message"] = (
-                        f"This would conflict with: {', '.join(conflicts)}. "
+                        f"You have a conflict: {conflicts_str}. "
                         f"Would you like to reschedule?"
                     )
-            except (ValueError, AttributeError):
+            except (ValueError, AttributeError) as e:
+                logger.warning(f"Error in conflict detection: {e}")
                 pass
     
     # Build response
-    payload_obj = AIActionPayload(**payload)
+    # Convert datetime strings to datetime objects if needed
+    payload_for_schema = payload.copy()
+    if payload.get("start_time") and isinstance(payload["start_time"], str):
+        try:
+            payload_for_schema["start_time"] = datetime.fromisoformat(payload["start_time"].replace("Z", "+00:00"))
+        except (ValueError, AttributeError):
+            pass  # Keep as string, let Pydantic handle it
+    if payload.get("end_time") and isinstance(payload["end_time"], str):
+        try:
+            payload_for_schema["end_time"] = datetime.fromisoformat(payload["end_time"].replace("Z", "+00:00"))
+        except (ValueError, AttributeError):
+            pass  # Keep as string, let Pydantic handle it
+    
+    try:
+        payload_obj = AIActionPayload(**payload_for_schema)
+    except Exception as e:
+        logger.error(f"Error creating AIActionPayload: {e}, payload: {payload_for_schema}", exc_info=True)
+        # Return a safe fallback
+        return AIActionResponse(
+            action="ASK",
+            payload=AIActionPayload(message="I couldn't parse that request. Please try rephrasing."),
+            confidence=0.0,
+            summary="Parsing error",
+        )
+    
+    # Ensure summary is always a string (not None)
+    summary = result.get("summary")
+    if not summary or not isinstance(summary, str):
+        # Fallback to message or default
+        summary = payload.get("message") or "Action parsed"
+    
     return AIActionResponse(
         action=result.get("action", "ASK"),
         payload=payload_obj,
         confidence=result.get("confidence", 0.0),
-        summary=result.get("summary", "Action parsed"),
+        summary=summary,
     )
 

@@ -1,6 +1,6 @@
 """Event endpoints."""
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Header, Query
@@ -25,6 +25,60 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/events", tags=["events"])
 
 
+def normalize_datetime(dt: datetime) -> datetime:
+    """Normalize datetime to UTC timezone-naive for database storage."""
+    if dt is None:
+        return None
+    if dt.tzinfo is not None:
+        # Convert to UTC and remove timezone info
+        return dt.astimezone(timezone.utc).replace(tzinfo=None)
+    # Already timezone-naive, assume UTC
+    return dt
+
+
+def event_to_response(event: Event) -> EventResponse:
+    """Convert Event model to EventResponse schema, mapping extra_metadata to metadata."""
+    # Get extra_metadata, defaulting to empty dict if None
+    extra_metadata = getattr(event, 'extra_metadata', None)
+    if extra_metadata is None:
+        extra_metadata = {}
+    
+    # Ensure datetimes are timezone-aware (UTC) for proper JSON serialization
+    # Database stores UTC as timezone-naive, so we add UTC timezone info
+    start_time = event.start_time
+    if start_time.tzinfo is None:
+        start_time = start_time.replace(tzinfo=timezone.utc)
+    
+    end_time = event.end_time
+    if end_time.tzinfo is None:
+        end_time = end_time.replace(tzinfo=timezone.utc)
+    
+    created_at = getattr(event, 'created_at', datetime.utcnow())
+    if created_at.tzinfo is None:
+        created_at = created_at.replace(tzinfo=timezone.utc)
+    
+    updated_at = getattr(event, 'updated_at', datetime.utcnow())
+    if updated_at.tzinfo is None:
+        updated_at = updated_at.replace(tzinfo=timezone.utc)
+    
+    event_dict = {
+        'id': str(event.id),
+        'user_id': int(event.user_id),
+        'team_id': getattr(event, 'team_id', None),
+        'title': str(event.title),
+        'description': getattr(event, 'description', None),
+        'start_time': start_time,
+        'end_time': end_time,
+        'timezone': str(getattr(event, 'timezone', 'UTC')),
+        'location': getattr(event, 'location', None),
+        'recurrence_rule_id': getattr(event, 'recurrence_rule_id', None),
+        'created_at': created_at,
+        'updated_at': updated_at,
+        'metadata': extra_metadata,
+    }
+    return EventResponse.model_validate(event_dict)
+
+
 def get_user_id(telegram_user_id: int = Header(..., alias="X-Telegram-User-Id")) -> int:
     """Dependency to extract telegram_user_id from header."""
     return telegram_user_id
@@ -37,8 +91,6 @@ async def create_event(
     session: AsyncSession = Depends(get_session),
 ):
     """Create a new event."""
-<<<<<<< Updated upstream
-=======
     # Normalize timezone-aware datetimes to UTC timezone-naive for database
     normalized_start = normalize_datetime(event_data.start_time)
     normalized_end = normalize_datetime(event_data.end_time)
@@ -52,33 +104,33 @@ async def create_event(
             status_code=400, 
             detail="You cannot create events in the past"
         )
-    
->>>>>>> Stashed changes
     # Check for duplicates (same title and overlapping time)
-    existing = await session.execute(
-        select(Event).where(
-            and_(
-                Event.user_id == user_id,
-                Event.title == event_data.title,
-                Event.start_time < event_data.end_time,
-                Event.end_time > event_data.start_time,
+    # Only check if title is provided and times overlap
+    if event_data.title:
+        existing = await session.execute(
+            select(Event).where(
+                and_(
+                    Event.user_id == user_id,
+                    Event.title == event_data.title,
+                    Event.start_time < normalized_end,
+                    Event.end_time > normalized_start,
+                )
             )
         )
-    )
-    if existing.scalar_one_or_none():
-        raise HTTPException(status_code=409, detail="Duplicate event detected")
+        if existing.scalar_one_or_none():
+            raise HTTPException(status_code=409, detail="Duplicate event detected")
     
     # Create event
     event = Event(
         user_id=user_id,
         title=event_data.title,
         description=event_data.description,
-        start_time=event_data.start_time,
-        end_time=event_data.end_time,
+        start_time=normalized_start,
+        end_time=normalized_end,
         timezone=event_data.timezone,
         location=event_data.location,
         recurrence_rule_id=event_data.recurrence_rule_id,
-        metadata=event_data.metadata,
+        extra_metadata=event_data.metadata or {},
     )
     session.add(event)
     await session.flush()
@@ -97,14 +149,14 @@ async def create_event(
         action="CREATE",
         resource_type="event",
         resource_id=event.id,
-        metadata={"title": event.title},
+        extra_metadata={"title": event.title},
     )
     session.add(audit)
     
     await session.commit()
     await session.refresh(event)
     
-    return EventResponse.model_validate(event)
+    return event_to_response(event)
 
 
 @router.get("", response_model=EventListResponse)
@@ -120,10 +172,13 @@ async def list_events(
     """List events with filters."""
     query = select(Event).where(Event.user_id == user_id)
     
+    # Normalize datetime query parameters to timezone-naive UTC
     if start_date:
-        query = query.where(Event.start_time >= start_date)
+        normalized_start = normalize_datetime(start_date)
+        query = query.where(Event.start_time >= normalized_start)
     if end_date:
-        query = query.where(Event.end_time <= end_date)
+        normalized_end = normalize_datetime(end_date)
+        query = query.where(Event.end_time <= normalized_end)
     if search:
         search_term = f"%{search}%"
         query = query.where(
@@ -146,7 +201,7 @@ async def list_events(
     events = result.scalars().all()
     
     return EventListResponse(
-        events=[EventResponse.model_validate(e) for e in events],
+        events=[event_to_response(e) for e in events],
         total=total,
         page=page,
         page_size=page_size,
@@ -168,7 +223,7 @@ async def get_event(
     event = result.scalar_one_or_none()
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
-    return EventResponse.model_validate(event)
+    return event_to_response(event)
 
 
 @router.put("/{event_id}", response_model=EventResponse)
@@ -188,15 +243,20 @@ async def update_event(
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
     
+    # Store original values for duplicate checking
+    original_start = event.start_time
+    original_end = event.end_time
+    original_title = event.title
+    
     # Update fields
     if event_update.title is not None:
         event.title = event_update.title
     if event_update.description is not None:
         event.description = event_update.description
     if event_update.start_time is not None:
-        event.start_time = event_update.start_time
+        event.start_time = normalize_datetime(event_update.start_time)
     if event_update.end_time is not None:
-        event.end_time = event_update.end_time
+        event.end_time = normalize_datetime(event_update.end_time)
     if event_update.timezone is not None:
         event.timezone = event_update.timezone
     if event_update.location is not None:
@@ -204,7 +264,29 @@ async def update_event(
     if event_update.recurrence_rule_id is not None:
         event.recurrence_rule_id = event_update.recurrence_rule_id
     if event_update.metadata is not None:
-        event.metadata.update(event_update.metadata)
+        event.extra_metadata.update(event_update.metadata)
+    
+    # Check for duplicates only if title or time changed to a value that conflicts
+    # Skip if only updating other fields (description, location, etc.)
+    title_changed = event_update.title is not None and event.title != original_title
+    time_changed = (event_update.start_time is not None or event_update.end_time is not None) and \
+                   (event.start_time != original_start or event.end_time != original_end)
+    
+    if title_changed or time_changed:
+        # Check for duplicates with new title/time (excluding current event)
+        existing = await session.execute(
+            select(Event).where(
+                and_(
+                    Event.user_id == user_id,
+                    Event.id != event_id,  # Exclude the event being updated
+                    Event.title == event.title,
+                    Event.start_time < event.end_time,
+                    Event.end_time > event.start_time,
+                )
+            )
+        )
+        if existing.scalar_one_or_none():
+            raise HTTPException(status_code=409, detail="Duplicate event detected")
     
     event.updated_at = datetime.utcnow()
     
@@ -231,14 +313,14 @@ async def update_event(
         action="UPDATE",
         resource_type="event",
         resource_id=event.id,
-        metadata={"title": event.title},
+        extra_metadata={"title": event.title},
     )
     session.add(audit)
     
     await session.commit()
     await session.refresh(event)
     
-    return EventResponse.model_validate(event)
+    return event_to_response(event)
 
 
 @router.delete("/{event_id}", status_code=204)
@@ -263,7 +345,7 @@ async def delete_event(
         action="DELETE",
         resource_type="event",
         resource_id=event.id,
-        metadata={"title": event.title},
+        extra_metadata={"title": event.title},
     )
     session.add(audit)
     
@@ -321,16 +403,24 @@ async def apply_ai_action(
         if not payload.event_id:
             raise HTTPException(status_code=400, detail="DELETE action requires event_id")
         
-        await delete_event(payload.event_id, user_id, session)
-        # Return a placeholder response
-        return EventResponse(
-            id=payload.event_id,
-            user_id=user_id,
-            title="",
-            start_time=datetime.utcnow(),
-            end_time=datetime.utcnow(),
-            timezone="UTC",
+        # Get event info before deleting
+        result = await session.execute(
+            select(Event).where(
+                and_(Event.id == payload.event_id, Event.user_id == user_id)
+            )
         )
+        event = result.scalar_one_or_none()
+        if not event:
+            raise HTTPException(status_code=404, detail="Event not found")
+        
+        # Store event info for response
+        event_info = event_to_response(event)
+        
+        # Delete the event
+        await delete_event(payload.event_id, user_id, session)
+        
+        # Return the deleted event info
+        return event_info
     
     elif action == "MOVE":  # Special handling: CREATE + DELETE
         if not payload.event_id:
@@ -369,7 +459,7 @@ async def apply_ai_action(
             action="MOVE",
             resource_type="event",
             resource_id=payload.event_id,
-            metadata={
+            extra_metadata={
                 "original_id": payload.event_id,
                 "new_id": new_event.id,
                 "title": original_event.title,

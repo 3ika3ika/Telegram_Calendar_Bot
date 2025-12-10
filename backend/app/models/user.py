@@ -19,7 +19,7 @@ class User(SQLModel, table=True):
     timezone: Optional[str] = Field(default="UTC")
     subscription_plan: str = Field(default="free")  # free, pro
     subscription_expires_at: Optional[datetime] = None
-    metadata: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    extra_metadata: dict = Field(default_factory=dict, sa_column=Column(JSON))
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 

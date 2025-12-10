@@ -1,22 +1,20 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { TelegramWebApp } from './types/telegram'
+import { TelegramWebAppType } from './types/telegram'
 import { User } from './types/api'
 import { apiClient } from './services/api'
 import CalendarPage from './pages/CalendarPage'
 import EventDetailPage from './pages/EventDetailPage'
 import SettingsPage from './pages/SettingsPage'
-<<<<<<< Updated upstream
-import AIAssistantPage from './pages/AIAssistantPage'
-import TelegramLogin from './components/TelegramLogin'
-=======
->>>>>>> Stashed changes
 import './App.css'
 
 declare global {
   interface Window {
-    Telegram?: TelegramWebApp
+    Telegram?: {
+      WebApp?: TelegramWebAppType
+    }
   }
+  
 }
 
 function App() {
@@ -24,9 +22,6 @@ function App() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-<<<<<<< Updated upstream
-  useEffect(() => {
-=======
   const authenticate = useCallback(async () => {
     try {
       setLoading(true)
@@ -60,6 +55,19 @@ function App() {
           setUser({ ...userData, timezone: detectedTimezone })
         } catch (err) {
           console.warn('Failed to update timezone:', err)
+        }
+      }
+      
+      // Clear cache on mobile devices to prevent stale data
+      // This is especially important for iPhone where cache can persist
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+      if (isMobile) {
+        try {
+          const { clearCache } = await import('./services/cache')
+          await clearCache()
+          console.log('Cache cleared on mobile device startup')
+        } catch (err) {
+          console.warn('Failed to clear cache:', err)
         }
       }
     } catch (err: any) {
@@ -173,8 +181,6 @@ function App() {
         requestContact: (existingWebApp as any)?.requestContact || (() => Promise.resolve(true))
       } as any
     }
-
->>>>>>> Stashed changes
     // Initialize Telegram WebApp
     if (window.Telegram?.WebApp) {
       const tg = window.Telegram.WebApp
@@ -194,29 +200,7 @@ function App() {
 
     // Try to authenticate
     authenticate()
-  }, [])
-
-  const authenticate = async () => {
-    try {
-      setLoading(true)
-      setError(null)
-
-      if (!window.Telegram?.WebApp?.initData) {
-        setError('Telegram WebApp not available')
-        setLoading(false)
-        return
-      }
-
-      const initData = window.Telegram.WebApp.initData
-      const userData = await apiClient.createSession(initData)
-      setUser(userData)
-    } catch (err: any) {
-      console.error('Authentication error:', err)
-      setError(err.message || 'Failed to authenticate')
-    } finally {
-      setLoading(false)
-    }
-  }
+  }, [authenticate])
 
   if (loading) {
     return (

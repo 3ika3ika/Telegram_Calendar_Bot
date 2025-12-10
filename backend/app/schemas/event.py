@@ -1,5 +1,5 @@
 """Event schemas."""
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List
 from pydantic import BaseModel, Field, field_validator
 
@@ -13,6 +13,16 @@ class EventBase(BaseModel):
     timezone: str = Field(default="UTC")
     location: Optional[str] = Field(None, max_length=200)
     metadata: dict = Field(default_factory=dict)
+    
+    @field_validator("start_time", "end_time", mode="before")
+    @classmethod
+    def ensure_timezone_aware(cls, v):
+        """Ensure datetime is timezone-aware. If naive, assume UTC."""
+        if isinstance(v, datetime):
+            if v.tzinfo is None:
+                # If timezone-naive, assume it's already in UTC
+                return v.replace(tzinfo=timezone.utc)
+        return v
     
     @field_validator("end_time")
     @classmethod

@@ -251,8 +251,15 @@ async def telegram_webhook(request: Request, session: AsyncSession = Depends(get
 
         # Non-mutating actions: reply with message/summary
         if ai_action_req.action in {"ASK", "SUGGEST", "NOOP", "CONFLICT"}:
-            reply = ai_action_req.payload.message or ai_action_req.original_text or ai_action_req.action
-            await telegram_bot.send_message(chat_id=chat_id, text=reply)
+            # Only send a reply if there's a proper message - don't echo user's text
+            if ai_action_req.payload.message:
+                await telegram_bot.send_message(chat_id=chat_id, text=ai_action_req.payload.message)
+            elif ai_action_req.action == "NOOP":
+                # For NOOP, don't send anything - user's message was not actionable
+                pass
+            else:
+                # For ASK, SUGGEST, CONFLICT, send a generic message if no specific message
+                await telegram_bot.send_message(chat_id=chat_id, text="I need more information to help you.")
             return {"ok": True}
 
         # Mutating actions: apply
@@ -282,9 +289,13 @@ async def telegram_webhook(request: Request, session: AsyncSession = Depends(get
         await telegram_bot.send_message(chat_id=chat_id, text=f"Request failed: {e.detail}")
     except Exception as e:
         logger.error(f"Telegram webhook AI error: {e}", exc_info=True)
+        error_msg = f"Sorry, I couldn't process that request."
+        # Include more detail in dev mode
+        if settings.DEBUG:
+            error_msg += f" Error: {str(e)}"
         await telegram_bot.send_message(
             chat_id=chat_id,
-            text="Sorry, I couldn't process that request.",
+            text=error_msg,
         )
 
     return {"ok": True}

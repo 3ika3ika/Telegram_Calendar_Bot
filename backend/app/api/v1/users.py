@@ -27,6 +27,17 @@ def verify_telegram_webapp(init_data: str) -> Optional[dict]:
         Parsed user data if valid, None otherwise
     """
     try:
+        # Development mode: Allow mock data when DEBUG is True
+        if settings.DEBUG and "dev_mode_hash" in init_data:
+            logger.info("Development mode: Bypassing Telegram WebApp signature verification")
+            parsed = parse_qs(init_data)
+            user_str = parsed.get("user", [None])[0]
+            if user_str:
+                import json
+                user_data = json.loads(unquote(user_str))
+                return user_data
+            return None
+        
         # Parse init_data
         parsed = parse_qs(init_data)
         
@@ -42,10 +53,15 @@ def verify_telegram_webapp(init_data: str) -> Optional[dict]:
                 data_check.append(f"{key}={value[0]}")
         data_check_string = "\n".join(sorted(data_check))
         
-        # Calculate secret key
+        # Calculate secret key as per Telegram docs:
+        # secret_key = HMAC_SHA256("WebAppData", bot_token)
+        bot_token = settings.TELEGRAM_BOT_TOKEN
+        if not bot_token:
+            logger.error("TELEGRAM_BOT_TOKEN is not set; cannot verify WebApp signature")
+            return None
         secret_key = hmac.new(
             "WebAppData".encode(),
-            settings.TELEGRAM_WEBAPP_SECRET.encode(),
+            bot_token.encode(),
             hashlib.sha256
         ).digest()
         
@@ -88,7 +104,8 @@ async def create_or_get_user(
     This endpoint verifies the Telegram WebApp signature and creates
     or retrieves the user based on telegram_user_id.
     """
-    if not settings.TELEGRAM_WEBAPP_SECRET:
+    # Allow development mode without secret
+    if not settings.DEBUG and not settings.TELEGRAM_WEBAPP_SECRET:
         raise HTTPException(status_code=500, detail="Telegram WebApp secret not configured")
     
     user_data = verify_telegram_webapp(init_data.init_data)
@@ -162,8 +179,8 @@ async def update_user(
     
     if user_update.timezone:
         user.timezone = user_update.timezone
-    if user_update.metadata:
-        user.metadata.update(user_update.metadata)
+    if user_update.extra_metadata:
+        user.extra_metadata.update(user_update.extra_metadata)
     
     await session.commit()
     await session.refresh(user)

@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { format } from 'date-fns'
 import { User, Event } from '../types/api'
 import { apiClient } from '../services/api'
+import { removeEventFromCache } from '../services/cache'
 import EventEditorModal from '../components/EventEditorModal'
 import NavBar from '../components/NavBar'
 import './EventDetailPage.css'
@@ -11,7 +12,7 @@ interface EventDetailPageProps {
   user: User
 }
 
-export default function EventDetailPage({ user }: EventDetailPageProps) {
+export default function EventDetailPage({}: EventDetailPageProps) {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [event, setEvent] = useState<Event | null>(null)
@@ -53,6 +54,8 @@ export default function EventDetailPage({ user }: EventDetailPageProps) {
     if (!event) return
     try {
       await apiClient.deleteEvent(event.id)
+      // Remove from cache immediately
+      await removeEventFromCache(event.id)
       navigate('/')
     } catch (error) {
       console.error('Error deleting event:', error)

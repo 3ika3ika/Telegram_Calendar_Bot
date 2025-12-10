@@ -47,8 +47,28 @@ export default function EventEditorModal({
       return
     }
 
-    const start = new Date(`${startDate}T${startTime}`)
-    const end = new Date(`${endDate}T${endTime}`)
+    // Get user's timezone
+    const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
+    
+    // Create dates in user's local timezone, then convert to UTC ISO string
+    // Parse date and time components
+    const [startYear, startMonth, startDay] = startDate.split('-').map(Number)
+    const [startHour, startMinute] = startTime.split(':').map(Number)
+    const [endYear, endMonth, endDay] = endDate.split('-').map(Number)
+    const [endHour, endMinute] = endTime.split(':').map(Number)
+    
+    // Create date objects in local timezone (JavaScript Date uses local timezone)
+    // This creates the date as the user entered it in their local time
+    const start = new Date(startYear, startMonth - 1, startDay, startHour, startMinute)
+    const end = new Date(endYear, endMonth - 1, endDay, endHour, endMinute)
+    
+    // Log for debugging
+    console.log('Date creation:', {
+      input: { startDate, startTime, endDate, endTime },
+      userTimezone,
+      localTime: { start: start.toString(), end: end.toString() },
+      utcISO: { start: start.toISOString(), end: end.toISOString() }
+    })
 
     if (end <= start) {
       alert('End time must be after start time')
@@ -57,29 +77,37 @@ export default function EventEditorModal({
 
     setSaving(true)
     try {
-      if (event) {
-        await onSave({
-          title,
-          description: description || undefined,
-          location: location || undefined,
-          start_time: start.toISOString(),
-          end_time: end.toISOString(),
-          reminder_offsets: reminders,
-        } as EventUpdate)
-      } else {
-        await onSave({
-          title,
-          description: description || undefined,
-          location: location || undefined,
-          start_time: start.toISOString(),
-          end_time: end.toISOString(),
-          reminder_offsets: reminders,
-        } as EventCreate)
-      }
-      onClose()
-    } catch (error) {
+      const eventData = event ? {
+        title,
+        description: description || undefined,
+        location: location || undefined,
+        start_time: start.toISOString(),
+        end_time: end.toISOString(),
+        timezone: userTimezone,
+        reminder_offsets: reminders.length > 0 ? reminders : [],
+      } as EventUpdate : {
+        title,
+        description: description || undefined,
+        location: location || undefined,
+        start_time: start.toISOString(),
+        end_time: end.toISOString(),
+        timezone: userTimezone,
+        reminder_offsets: reminders.length > 0 ? reminders : [],
+      } as EventCreate
+      
+      console.log('Saving event with data:', eventData)
+      await onSave(eventData)
+      // onClose() is called in handleSaveEvent after successful save
+    } catch (error: any) {
       console.error('Error saving event:', error)
-      alert('Failed to save event')
+      console.error('Error response:', error?.response)
+      // Show the actual error message from the API
+      const errorMessage = error?.response?.data?.detail || 
+                          error?.response?.data?.message ||
+                          error?.message || 
+                          'Failed to save event. Please check the console for details.'
+      alert(`Error: ${errorMessage}`)
+      // Don't close the modal on error so user can retry
     } finally {
       setSaving(false)
     }

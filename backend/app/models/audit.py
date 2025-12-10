@@ -15,7 +15,7 @@ class AuditLog(SQLModel, table=True):
     action: str  # CREATE, UPDATE, DELETE, MOVE, etc.
     resource_type: str  # event, reminder, user, etc.
     resource_id: str
-    metadata: dict = Field(default_factory=dict, sa_column=Column(JSON))
+    extra_metadata: dict = Field(default_factory=dict, sa_column=Column(JSON))
     created_at: datetime = Field(default_factory=datetime.utcnow)
     
     __table_args__ = (
