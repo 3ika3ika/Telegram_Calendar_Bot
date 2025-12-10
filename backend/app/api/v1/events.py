@@ -1,7 +1,8 @@
 """Event endpoints."""
 import logging
+import re
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Optional, List
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Header, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,7 +20,7 @@ from app.schemas.event import (
     EventListResponse,
     EventQueryParams,
 )
-from app.schemas.ai import AIApplyActionRequest
+from app.schemas.ai import AIApplyActionRequest, BatchFilters, BatchUpdateFields
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/events", tags=["events"])
@@ -34,6 +35,66 @@ def normalize_datetime(dt: datetime) -> datetime:
         return dt.astimezone(timezone.utc).replace(tzinfo=None)
     # Already timezone-naive, assume UTC
     return dt
+
+
+def parse_time_offset(offset_str: str) -> timedelta:
+    """
+    Parse time offset string like "+1h", "-30m", "+2d" into timedelta.
+    
+    Examples:
+        "+1h" -> timedelta(hours=1)
+        "-30m" -> timedelta(minutes=-30)
+        "+2d" -> timedelta(days=2)
+    """
+    if not offset_str:
+        return timedelta(0)
+    
+    # Match pattern: [+-]?[0-9]+[hdms]?
+    match = re.match(r'^([+-]?)(\d+)([hdms]?)$', offset_str.strip().lower())
+    if not match:
+        raise ValueError(f"Invalid time offset format: {offset_str}")
+    
+    sign, amount, unit = match.groups()
+    amount = int(amount)
+    if sign == '-':
+        amount = -amount
+    
+    unit_map = {
+        'h': 'hours',
+        'd': 'days',
+        'm': 'minutes',
+        's': 'seconds',
+        '': 'hours'  # Default to hours if no unit
+    }
+    
+    return timedelta(**{unit_map[unit]: amount})
+
+
+def build_event_query_from_filters(filters: BatchFilters, user_id: int):
+    """Build SQLAlchemy query from batch filters."""
+    query = select(Event).where(Event.user_id == user_id)
+    
+    if filters.date_range_start:
+        normalized_start = normalize_datetime(filters.date_range_start)
+        query = query.where(Event.start_time >= normalized_start)
+    
+    if filters.date_range_end:
+        normalized_end = normalize_datetime(filters.date_range_end)
+        query = query.where(Event.end_time <= normalized_end)
+    
+    if filters.title_pattern:
+        query = query.where(Event.title.ilike(f"%{filters.title_pattern}%"))
+    
+    if filters.event_ids:
+        query = query.where(Event.id.in_(filters.event_ids))
+    
+    if filters.recurrence_rule_id is not None:
+        query = query.where(Event.recurrence_rule_id == filters.recurrence_rule_id)
+    
+    # Tags would need to be stored in extra_metadata, so we'd query that
+    # For now, we'll skip tag filtering as it requires schema changes
+    
+    return query
 
 
 def event_to_response(event: Event) -> EventResponse:
@@ -264,6 +325,8 @@ async def update_event(
     if event_update.recurrence_rule_id is not None:
         event.recurrence_rule_id = event_update.recurrence_rule_id
     if event_update.metadata is not None:
+        if event.extra_metadata is None:
+            event.extra_metadata = {}
         event.extra_metadata.update(event_update.metadata)
     
     # Check for duplicates only if title or time changed to a value that conflicts
@@ -355,7 +418,7 @@ async def delete_event(
     return None
 
 
-@router.post("/apply_action", response_model=EventResponse)
+@router.post("/apply_action")
 async def apply_ai_action(
     action_request: AIApplyActionRequest,
     user_id: int = Depends(get_user_id),
@@ -366,6 +429,8 @@ async def apply_ai_action(
     
     This endpoint validates and applies actions from AI parsing.
     It enforces global rules (e.g., MOVE = CREATE + DELETE).
+    
+    Returns EventResponse for single-event actions, or a summary dict for batch operations.
     """
     action = action_request.action
     payload = action_request.payload
@@ -376,12 +441,32 @@ async def apply_ai_action(
         
         event_data = EventCreate(
             title=payload.title,
-            description=payload.message,
+            description=payload.description or payload.message,
             start_time=payload.start_time,
             end_time=payload.end_time,
+            location=payload.location,
             reminder_offsets=payload.reminders or [],
         )
-        return await create_event(event_data, user_id, session)
+        created_event = await create_event(event_data, user_id, session)
+        
+        # Add notes and tags to metadata if provided
+        if payload.notes or payload.tags:
+            result = await session.execute(
+                select(Event).where(Event.id == created_event.id)
+            )
+            event = result.scalar_one_or_none()
+            if event:
+                if event.extra_metadata is None:
+                    event.extra_metadata = {}
+                if payload.notes:
+                    event.extra_metadata["notes"] = payload.notes
+                if payload.tags:
+                    event.extra_metadata["tags"] = payload.tags
+                await session.commit()
+                await session.refresh(event)
+                return event_to_response(event)
+        
+        return created_event
     
     elif action == "UPDATE":
         if not payload.event_id:
@@ -390,12 +475,25 @@ async def apply_ai_action(
         update_data = EventUpdate()
         if payload.title:
             update_data.title = payload.title
+        if payload.description:
+            update_data.description = payload.description
         if payload.start_time:
             update_data.start_time = payload.start_time
         if payload.end_time:
             update_data.end_time = payload.end_time
+        if payload.location:
+            update_data.location = payload.location
         if payload.reminders:
             update_data.reminder_offsets = payload.reminders
+        
+        # Handle notes and tags in metadata
+        metadata_updates = {}
+        if payload.notes:
+            metadata_updates["notes"] = payload.notes
+        if payload.tags:
+            metadata_updates["tags"] = payload.tags
+        if metadata_updates:
+            update_data.metadata = metadata_updates
         
         return await update_event(payload.event_id, update_data, user_id, session)
     
@@ -469,6 +567,198 @@ async def apply_ai_action(
         await session.commit()
         
         return new_event
+    
+    elif action == "DUPLICATE":
+        if not payload.event_id:
+            raise HTTPException(status_code=400, detail="DUPLICATE action requires event_id")
+        
+        # Get original event
+        result = await session.execute(
+            select(Event).where(
+                and_(Event.id == payload.event_id, Event.user_id == user_id)
+            )
+        )
+        original_event = result.scalar_one_or_none()
+        if not original_event:
+            raise HTTPException(status_code=404, detail="Event to duplicate not found")
+        
+        # Use new times if provided, otherwise use original times
+        new_start = payload.start_time if payload.start_time else original_event.start_time
+        new_end = payload.end_time if payload.end_time else original_event.end_time
+        
+        # Create duplicate event
+        duplicate_data = EventCreate(
+            title=payload.title or f"{original_event.title} (copy)",
+            description=payload.description or original_event.description,
+            start_time=new_start,
+            end_time=new_end,
+            timezone=original_event.timezone,
+            location=payload.location or original_event.location,
+            reminder_offsets=payload.reminders or [],
+        )
+        duplicate_event = await create_event(duplicate_data, user_id, session)
+        
+        # Audit log
+        audit = AuditLog(
+            user_id=user_id,
+            action="DUPLICATE",
+            resource_type="event",
+            resource_id=original_event.id,
+            extra_metadata={
+                "original_id": original_event.id,
+                "duplicate_id": duplicate_event.id,
+                "title": original_event.title,
+            },
+        )
+        session.add(audit)
+        await session.commit()
+        
+        return duplicate_event
+    
+    elif action == "BATCH_UPDATE":
+        if not payload.filters or not payload.update_fields:
+            raise HTTPException(status_code=400, detail="BATCH_UPDATE requires filters and update_fields")
+        
+        # Build query from filters
+        query = build_event_query_from_filters(payload.filters, user_id)
+        result = await session.execute(query)
+        events_to_update = result.scalars().all()
+        
+        if not events_to_update:
+            raise HTTPException(status_code=404, detail="No events found matching filters")
+        
+        updated_count = 0
+        update_fields = payload.update_fields
+        
+        for event in events_to_update:
+            # Update basic fields
+            if update_fields.title is not None:
+                event.title = update_fields.title
+            if update_fields.description is not None:
+                event.description = update_fields.description
+            if update_fields.location is not None:
+                event.location = update_fields.location
+            
+            # Handle time offsets
+            if update_fields.start_time_offset:
+                offset = parse_time_offset(update_fields.start_time_offset)
+                event.start_time = event.start_time + offset
+            if update_fields.end_time_offset:
+                offset = parse_time_offset(update_fields.end_time_offset)
+                event.end_time = event.end_time + offset
+            
+            # Update reminders if provided
+            if update_fields.reminders is not None:
+                # Delete existing reminders
+                result_reminders = await session.execute(
+                    select(Reminder).where(Reminder.event_id == event.id)
+                )
+                for reminder in result_reminders.scalars():
+                    await session.delete(reminder)
+                
+                # Create new reminders
+                for offset_minutes in update_fields.reminders:
+                    reminder = Reminder(
+                        event_id=event.id,
+                        offset_minutes=offset_minutes,
+                    )
+                    session.add(reminder)
+            
+            # Update tags in metadata (if supported)
+            if update_fields.tags is not None:
+                if event.extra_metadata is None:
+                    event.extra_metadata = {}
+                event.extra_metadata["tags"] = update_fields.tags
+            
+            event.updated_at = datetime.utcnow()
+            updated_count += 1
+            
+            # Audit log for each update
+            audit = AuditLog(
+                user_id=user_id,
+                action="BATCH_UPDATE",
+                resource_type="event",
+                resource_id=event.id,
+                extra_metadata={"title": event.title, "batch": True},
+            )
+            session.add(audit)
+        
+        await session.commit()
+        
+        # Return the first updated event as representative
+        if events_to_update:
+            await session.refresh(events_to_update[0])
+            response = event_to_response(events_to_update[0])
+            # Add metadata about batch operation
+            response.metadata["batch_count"] = updated_count
+            return response
+        else:
+            raise HTTPException(status_code=404, detail="No events updated")
+    
+    elif action == "BATCH_DELETE":
+        if not payload.filters:
+            raise HTTPException(status_code=400, detail="BATCH_DELETE requires filters")
+        
+        # Build query from filters
+        query = build_event_query_from_filters(payload.filters, user_id)
+        result = await session.execute(query)
+        events_to_delete = result.scalars().all()
+        
+        if not events_to_delete:
+            raise HTTPException(status_code=404, detail="No events found matching filters")
+        
+        deleted_count = 0
+        deleted_titles = []
+        first_event_data = None  # Store first event data before deletion
+        
+        for event in events_to_delete:
+            deleted_titles.append(event.title)
+            
+            # Store first event data before deletion
+            if first_event_data is None:
+                first_event_data = {
+                    "id": event.id,
+                    "start_time": event.start_time,
+                    "end_time": event.end_time,
+                    "timezone": event.timezone,
+                }
+            
+            # Audit log before deletion
+            audit = AuditLog(
+                user_id=user_id,
+                action="BATCH_DELETE",
+                resource_type="event",
+                resource_id=event.id,
+                extra_metadata={"title": event.title, "batch": True},
+            )
+            session.add(audit)
+            
+            await session.delete(event)
+            deleted_count += 1
+        
+        await session.commit()
+        
+        # For batch delete, return a summary response
+        if deleted_count > 0 and first_event_data:
+            summary_dict = {
+                "id": first_event_data["id"],
+                "user_id": user_id,
+                "title": f"Batch delete: {deleted_count} events",
+                "description": f"Deleted {deleted_count} events: {', '.join(deleted_titles[:5])}",
+                "start_time": first_event_data["start_time"].replace(tzinfo=timezone.utc) if first_event_data["start_time"] else datetime.utcnow().replace(tzinfo=timezone.utc),
+                "end_time": first_event_data["end_time"].replace(tzinfo=timezone.utc) if first_event_data["end_time"] else datetime.utcnow().replace(tzinfo=timezone.utc),
+                "timezone": first_event_data["timezone"] or "UTC",
+                "created_at": datetime.utcnow().replace(tzinfo=timezone.utc),
+                "updated_at": datetime.utcnow().replace(tzinfo=timezone.utc),
+                "metadata": {
+                    "batch_deleted": True,
+                    "deleted_count": deleted_count,
+                    "deleted_titles": deleted_titles[:10],  # First 10 titles
+                }
+            }
+            return EventResponse.model_validate(summary_dict)
+        else:
+            raise HTTPException(status_code=404, detail="No events deleted")
     
     else:
         raise HTTPException(status_code=400, detail=f"Action {action} not supported for direct application")

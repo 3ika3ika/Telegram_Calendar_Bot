@@ -264,7 +264,17 @@ async def telegram_webhook(request: Request, session: AsyncSession = Depends(get
 
         # Mutating actions: apply
         result_event = await apply_ai_action(ai_action_req, user.telegram_user_id, session)
-        summary = format_event_summary(ai_action_req.action, result_event, ai_action_req.payload.message)
+        
+        # Handle batch operations specially
+        if ai_action_req.action in {"BATCH_UPDATE", "BATCH_DELETE"}:
+            # Use the message from payload if available, otherwise format the result
+            if ai_action_req.payload.message:
+                summary = ai_action_req.payload.message
+            else:
+                batch_count = result_event.metadata.get("batch_count") or result_event.metadata.get("deleted_count", 0)
+                summary = f"{ai_action_req.action}: {batch_count} events processed"
+        else:
+            summary = format_event_summary(ai_action_req.action, result_event, ai_action_req.payload.message)
         logger.info(
             "AI action applied",
             extra={

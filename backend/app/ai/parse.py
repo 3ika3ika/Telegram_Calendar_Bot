@@ -17,7 +17,11 @@ def normalize_datetime_for_comparison(dt: datetime) -> datetime:
     return dt
 
 # Allowed actions
-ALLOWED_ACTIONS = {"CREATE", "UPDATE", "DELETE", "MOVE", "SUGGEST", "ASK", "NOOP", "CONFLICT"}
+ALLOWED_ACTIONS = {
+    "CREATE", "UPDATE", "DELETE", "MOVE", "DUPLICATE",
+    "BATCH_UPDATE", "BATCH_DELETE",
+    "SUGGEST", "ASK", "NOOP", "CONFLICT"
+}
 
 
 def validate_ai_action(action_data: Dict[str, Any]) -> tuple[bool, Optional[str]]:
@@ -71,8 +75,33 @@ def validate_ai_action(action_data: Dict[str, Any]) -> tuple[bool, Optional[str]
         if not payload.get("event_id"):
             return False, "DELETE action requires event_id"
     
+    elif action == "DUPLICATE":
+        if not payload.get("event_id"):
+            return False, "DUPLICATE action requires event_id"
+        # Optional: new start_time/end_time for the duplicate
+        if payload.get("start_time") and payload.get("end_time"):
+            try:
+                start = datetime.fromisoformat(payload["start_time"].replace("Z", "+00:00"))
+                end = datetime.fromisoformat(payload["end_time"].replace("Z", "+00:00"))
+                if end <= start:
+                    return False, "end_time must be after start_time"
+            except (ValueError, AttributeError) as e:
+                return False, f"Invalid datetime format: {e}"
+    
+    elif action == "BATCH_UPDATE":
+        if not payload.get("filters"):
+            return False, "BATCH_UPDATE action requires filters"
+        if not payload.get("update_fields"):
+            return False, "BATCH_UPDATE action requires update_fields"
+    
+    elif action == "BATCH_DELETE":
+        if not payload.get("filters"):
+            return False, "BATCH_DELETE action requires filters"
+        if not payload.get("message"):
+            return False, "BATCH_DELETE action requires message summarizing affected events"
+    
     elif action == "SUGGEST":
-        # SUGGEST should have message and optional times
+        # SUGGEST should have message
         if not payload.get("message"):
             return False, "SUGGEST action requires message"
     
